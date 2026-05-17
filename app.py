@@ -103,7 +103,7 @@ class ProjectFileAnalyzer:
 
         for table in self.doc.tables:
             if len(table.rows) > 0:
-                first_row_text = [cell.text.strip().lower() for cell in table.rows.cells]
+                first_row_text = [cell.text.strip().lower() for cell in table.rows[0].cells]
                 has_description = any("description" in t for t in first_row_text)
                 has_page = any("page" in t for t in first_row_text)
                 if has_description and has_page:
