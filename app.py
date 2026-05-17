@@ -214,10 +214,10 @@ class ProjectFileAnalyzer:
                 )
         return headings
 
-    def check_introduction_length(self, min_words=200, max_words=800):
+  def check_introduction_length(self, min_words=200, max_words=800):
         """
         Checks the Introduction section word count.
-        (Replaces the generic 'Abstract' check — BCA template starts with Introduction.)
+        Updated to handle numbered headings (e.g., "1. Introduction").
         """
         if not self.doc:
             return None
@@ -227,11 +227,19 @@ class ProjectFileAnalyzer:
 
         for paragraph in self.doc.paragraphs:
             text = paragraph.text.strip()
-            if text.lower().startswith("introduction") and not is_intro:
+            text_lower = text.lower()
+            style_name = paragraph.style.name if paragraph.style and paragraph.style.name else ""
+            is_heading = style_name.startswith("Heading")
+
+            # Trigger if "introduction" is in the text AND it's a heading/short title
+            if "introduction" in text_lower and (is_heading or len(text) < 60) and not is_intro:
                 is_intro = True
                 continue
-            if is_intro and paragraph.style and paragraph.style.name.startswith("Heading"):
+                
+            # Stop capturing if we hit the NEXT major heading
+            if is_intro and is_heading and "introduction" not in text_lower:
                 break
+                
             if is_intro:
                 intro_text += text + " "
 
@@ -247,7 +255,10 @@ class ProjectFileAnalyzer:
             )
 
     def check_bibliography(self):
-        """Checks that Bibliography section exists and has at least 5 entries."""
+        """
+        Checks that Bibliography section exists and has at least 5 entries.
+        Updated to handle numbered headings (e.g., "7. References").
+        """
         if not self.doc:
             return None
 
@@ -256,9 +267,18 @@ class ProjectFileAnalyzer:
 
         for paragraph in self.doc.paragraphs:
             text = paragraph.text.strip()
-            if text.lower().startswith("bibliography") or text.lower().startswith("references"):
+            text_lower = text.lower()
+            style_name = paragraph.style.name if paragraph.style and paragraph.style.name else ""
+            is_heading = style_name.startswith("Heading")
+
+            # Trigger if "bibliography" or "references" is in the text
+            if ("bibliography" in text_lower or "references" in text_lower) and (is_heading or len(text) < 60):
                 is_bib = True
                 continue
+                
+            if is_bib and is_heading and not ("bibliography" in text_lower or "references" in text_lower):
+                break
+                
             if is_bib:
                 bib_text += text + "\n"
 
