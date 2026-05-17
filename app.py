@@ -214,7 +214,7 @@ class ProjectFileAnalyzer:
                 )
         return headings
 
-  def check_introduction_length(self, min_words=200, max_words=800):
+    def check_introduction_length(self, min_words=200, max_words=800):
         """
         Checks the Introduction section word count.
         Updated to handle numbered headings (e.g., "1. Introduction").
