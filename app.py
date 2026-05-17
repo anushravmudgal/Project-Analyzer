@@ -2,6 +2,7 @@ import streamlit as st
 import docx
 import re
 import io
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 # ==========================================
 # ANALYZER CLASS
@@ -102,7 +103,7 @@ class ProjectFileAnalyzer:
 
         for table in self.doc.tables:
             if len(table.rows) > 0:
-                first_row_text = [cell.text.strip().lower() for cell in table.rows[0].cells]
+                first_row_text = [cell.text.strip().lower() for cell in table.rows.cells]
                 has_description = any("description" in t for t in first_row_text)
                 has_page = any("page" in t for t in first_row_text)
                 if has_description and has_page:
@@ -279,6 +280,86 @@ class ProjectFileAnalyzer:
                 "warning",
             )
 
+    def check_formatting_compliance(self):
+        """
+        Checks the document for adherence to university formatting guidelines:
+        Times New Roman, 12pt body, 14pt subheadings, 16pt headings, 1.5 line spacing, Justified.
+        """
+        checks = {
+            "Font Style (Times New Roman)": {"status": "success", "msg": "Pass"},
+            "Body Text Size (12pt)": {"status": "success", "msg": "Pass"},
+            "Heading Size (16pt)": {"status": "success", "msg": "Pass"},
+            "Subheading Size (14pt)": {"status": "success", "msg": "Pass"},
+            "Line Spacing (1.5)": {"status": "success", "msg": "Pass"},
+            "Alignment (Justified)": {"status": "success", "msg": "Pass"}
+        }
+
+        if not self.doc:
+            return checks
+
+        fonts, body_sizes, heading_sizes, subheading_sizes, spacings, alignments = set(), set(), set(), set(), set(), set()
+
+        for p in self.doc.paragraphs:
+            if not p.text.strip(): 
+                continue
+            
+            style_name = p.style.name if p.style and p.style.name else ""
+
+            # Paragraph-level formats (Alignment & Spacing)
+            align = p.alignment or (p.style.paragraph_format.alignment if p.style else None)
+            if align is not None: alignments.add(align)
+
+            spacing = p.paragraph_format.line_spacing or (p.style.paragraph_format.line_spacing if p.style else None)
+            if spacing is not None: spacings.add(spacing)
+
+            # Run-level formats (Font & Size)
+            for run in p.runs:
+                if not run.text.strip(): 
+                    continue
+
+                fname = run.font.name or (p.style.font.name if p.style and p.style.font else None)
+                if fname: fonts.add(fname)
+
+                fsize = run.font.size or (p.style.font.size if p.style and p.style.font else None)
+                if fsize:
+                    pt = round(fsize.pt, 1)
+                    if style_name == "Heading 1":
+                        heading_sizes.add(pt)
+                    elif style_name.startswith("Heading"):
+                        subheading_sizes.add(pt)
+                    else:
+                        body_sizes.add(pt)
+
+        # 1. Font Name
+        if fonts and "Times New Roman" not in fonts:
+            checks["Font Style (Times New Roman)"] = {"status": "error", "msg": f"Detected: {', '.join(fonts)}"}
+        elif len(fonts) > 1:
+            checks["Font Style (Times New Roman)"] = {"status": "warning", "msg": f"Mixed fonts detected: {', '.join(fonts)}"}
+            
+        # 2. Body Text Size
+        if body_sizes and 12.0 not in body_sizes:
+            checks["Body Text Size (12pt)"] = {"status": "error", "msg": f"Detected: {', '.join(map(str, body_sizes))}pt"}
+        elif len(body_sizes) > 1:
+            checks["Body Text Size (12pt)"] = {"status": "warning", "msg": f"Mixed sizes detected: {', '.join(map(str, body_sizes))}pt"}
+
+        # 3. Heading 1 Size (16pt)
+        if heading_sizes and 16.0 not in heading_sizes:
+            checks["Heading Size (16pt)"] = {"status": "warning", "msg": f"Detected: {', '.join(map(str, heading_sizes))}pt (Make sure Heading 1 is 16pt)"}
+
+        # 4. Subheading Size (14pt)
+        if subheading_sizes and 14.0 not in subheading_sizes:
+            checks["Subheading Size (14pt)"] = {"status": "warning", "msg": f"Detected: {', '.join(map(str, subheading_sizes))}pt (Make sure Subheadings are 14pt)"}
+
+        # 5. Line Spacing (1.5)
+        if spacings and 1.5 not in spacings:
+             checks["Line Spacing (1.5)"] = {"status": "warning", "msg": "Detected variations in line spacing (Should be 1.5)."}
+
+        # 6. Alignment (3 is Justify in WD_ALIGN_PARAGRAPH enum)
+        if alignments and WD_ALIGN_PARAGRAPH.JUSTIFY not in alignments and 3 not in alignments:
+             checks["Alignment (Justified)"] = {"status": "warning", "msg": "Body text does not appear to be consistently Justified."}
+
+        return checks
+
 
 # ==========================================
 # SUBJECT CODE OPTIONS
@@ -416,8 +497,25 @@ It must include all of these chapters:
 
                 st.divider()
 
-                # ── 4. Mandatory BCA Sections ────────────────────────────────
-                st.header("4. Mandatory Project Sections")
+                # ── 4. Formatting Compliance ──────────────────────────────────
+                st.header("4. Formatting Compliance")
+                st.write("Checking university guidelines: Times New Roman, 12pt body, 14pt/16pt headings, 1.5 spacing, Justified.")
+                st.info("💡 *Note: Word's inherited styles can sometimes mask formatting. Review warnings manually to be safe.*")
+                
+                fmt_results = analyzer.check_formatting_compliance()
+                
+                for rule, data in fmt_results.items():
+                    if data["status"] == "success":
+                        st.success(f"✅ **{rule}**: {data['msg']}")
+                    elif data["status"] == "warning":
+                        st.warning(f"⚠️ **{rule}**: {data['msg']}")
+                    else:
+                        st.error(f"❌ **{rule}**: {data['msg']}")
+
+                st.divider()
+
+                # ── 5. Mandatory BCA Sections ────────────────────────────────
+                st.header("5. Mandatory Project Sections")
                 st.write(
                     "Checks for the 11 official BCA major project sections "
                     "as per the IMS Noida / CCSU template."
@@ -444,8 +542,8 @@ It must include all of these chapters:
 
                 st.divider()
 
-                # ── 5. Content Rules ─────────────────────────────────────────
-                st.header("5. Content Rules")
+                # ── 6. Content Rules ─────────────────────────────────────────
+                st.header("6. Content Rules")
 
                 intro_result = analyzer.check_introduction_length()
                 if intro_result:
@@ -471,8 +569,8 @@ It must include all of these chapters:
 
                 st.divider()
 
-                # ── 6. Document Structure (Headings) ─────────────────────────
-                st.header("6. Document Structure (Headings)")
+                # ── 7. Document Structure (Headings) ─────────────────────────
+                st.header("7. Document Structure (Headings)")
                 st.write(
                     "Sections listed here used Word's official Heading styles. "
                     "Missing sections likely used bold text instead — fix those in Word."
