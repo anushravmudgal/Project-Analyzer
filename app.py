@@ -199,7 +199,6 @@ class ProjectFileAnalyzer:
 
 SUBJECT_CODES = [
     "BCA-605",
-    "BCA-505P",
     "Custom — enter below",
 ]
 
